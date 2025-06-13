@@ -1,0 +1,48 @@
+{
+  "file_limits": {
+    "max_files_in_add_dir": 1000,
+    "max_file_size_in_add_dir": 5000000,
+    "max_file_content_size_create": 5000000,
+    "max_multiple_read_size": 100000
+  },
+  "fuzzy_matching": {
+    "min_fuzzy_score": 80,
+    "min_edit_score": 85
+  },
+  "conversation": {
+    "max_history_messages": 50,
+    "max_context_files": 5,
+    "estimated_max_tokens": 33000,
+    "tokens_per_message_estimate": 200,
+    "tokens_per_file_kb": 300,
+    "context_warning_threshold": 0.8,
+    "aggressive_truncation_threshold": 0.9
+  },
+  "models": {
+    "default_model": "llama-3.3-70b",
+    "reasoner_model": "qwen-3-32b"
+  },
+  "security": {
+    "require_powershell_confirmation": true,
+    "require_bash_confirmation": true
+  },
+  "excluded_files": [
+    ".DS_Store", "Thumbs.db", ".gitignore", ".python-version", "uv.lock",
+    ".uv", "uvenv", ".uvenv", ".venv", "venv", "__pycache__", ".pytest_cache",
+    ".coverage", ".mypy_cache", "node_modules", "package-lock.json", "yarn.lock",
+    "pnpm-lock.yaml", ".next", ".nuxt", "dist", "build", ".cache", ".parcel-cache",
+    ".turbo", ".vercel", ".output", ".contentlayer", "out", "coverage",
+    ".nyc_output", "storybook-static", ".env", ".env.local", ".env.development",
+    ".env.production", ".git", ".svn", ".hg", "CVS"
+  ],
+  "excluded_extensions": [
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp", ".avif",
+    ".mp4", ".webm", ".mov", ".mp3", ".wav", ".ogg", ".zip", ".tar",
+    ".gz", ".7z", ".rar", ".exe", ".dll", ".so", ".dylib", ".bin",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pyc",
+    ".pyo", ".pyd", ".egg", ".whl", ".uv", ".uvenv", ".db", ".sqlite",
+    ".sqlite3", ".log", ".idea", ".vscode", ".map", ".chunk.js",
+    ".chunk.css", ".min.js", ".min.css", ".bundle.js", ".bundle.css",
+    ".cache", ".tmp", ".temp", ".ttf", ".otf", ".woff", ".woff2", ".eot"
+  ]
+}

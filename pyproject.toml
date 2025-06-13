@@ -1,0 +1,7 @@
+[project]
+name = "cerebras"
+version = "0.1.0"
+description = "Cerebras Engineer Assistant"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
