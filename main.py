@@ -1371,14 +1371,6 @@ def main_loop() -> None:
             full_response_content = message.content or ""
             accumulated_tool_calls: List[Dict[str, Any]] = []
             
-            # DEBUG: Log the full message structure
-            console.print(f"[dim]DEBUG - Model: {current_model}[/dim]")
-            console.print(f"[dim]DEBUG - Message content: {repr(full_response_content)}[/dim]")
-            console.print(f"[dim]DEBUG - Has tool_calls: {hasattr(message, 'tool_calls') and message.tool_calls is not None}[/dim]")
-            if hasattr(message, 'tool_calls') and message.tool_calls:
-                console.print(f"[dim]DEBUG - Tool calls count: {len(message.tool_calls)}[/dim]")
-                for i, tc in enumerate(message.tool_calls):
-                    console.print(f"[dim]DEBUG - Tool call {i}: {tc}[/dim]")
             
             # Extract tool calls if present
             if message.tool_calls:

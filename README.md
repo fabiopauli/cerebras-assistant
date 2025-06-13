@@ -85,6 +85,8 @@ Cerebras AI Code Assistant is an enhanced command-line interface built on top of
    ```bash
    python main.py
    ```
+   Important: Use /reasoner command to change to qwen-3-32b that works better in this assistant !
+   
 
 ## Usage
 
