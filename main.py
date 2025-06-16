@@ -1156,6 +1156,28 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
         
         if func_name == "read_file":
             norm_path = normalize_path(args["file_path"])
+            
+            # Check file size before reading to prevent context overflow
+            try:
+                file_size = Path(norm_path).stat().st_size
+                # Estimate tokens (roughly 4 chars per token)
+                estimated_tokens = file_size // 4
+                
+                # Get model-specific context limit
+                from config import get_max_tokens_for_model
+                current_model = model_context.get('current_model', DEFAULT_MODEL)
+                max_tokens = get_max_tokens_for_model(current_model)
+                
+                # Don't read files that would use more than 60% of context window
+                max_file_tokens = int(max_tokens * 0.6)
+                
+                if estimated_tokens > max_file_tokens:
+                    file_size_kb = file_size / 1024
+                    return f"Error: File '{norm_path}' is too large ({file_size_kb:.1f}KB, ~{estimated_tokens} tokens) to read safely. Current model ({current_model}) has a context limit of {max_tokens} tokens. Maximum safe file size is ~{max_file_tokens} tokens ({(max_file_tokens * 4) / 1024:.1f}KB). Consider reading the file in smaller sections or using a different approach."
+                    
+            except OSError as e:
+                return f"Error: Could not check file size for '{norm_path}': {e}"
+            
             content = read_local_file(norm_path)
             return f"Content of file '{norm_path}':\n\n{content}"
             
@@ -1165,14 +1187,32 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
                 "errors": {}
             }
             total_content_size = 0
+            
+            # Get model-specific context limit for multiple files
+            from config import get_max_tokens_for_model
+            current_model = model_context.get('current_model', DEFAULT_MODEL)
+            max_tokens = get_max_tokens_for_model(current_model)
+            # Use smaller percentage for multiple files to be safer
+            max_total_tokens = int(max_tokens * 0.4)
+            max_total_size = max_total_tokens * 4  # Convert tokens back to character estimate
 
             for fp in args["file_paths"]:
                 try:
                     norm_path = normalize_path(fp)
+                    
+                    # Check individual file size first
+                    try:
+                        file_size = Path(norm_path).stat().st_size
+                        if file_size > max_total_size // 2:  # Individual file shouldn't be more than half the total budget
+                            response_data["errors"][norm_path] = f"File too large ({file_size/1024:.1f}KB) for multiple file read operation."
+                            continue
+                    except OSError:
+                        pass  # Continue with normal reading if size check fails
+                    
                     content = read_local_file(norm_path)
 
-                    if total_content_size + len(content) > MAX_MULTIPLE_READ_SIZE:
-                        response_data["errors"][norm_path] = "Could not read file, as total content size would exceed the safety limit."
+                    if total_content_size + len(content) > max_total_size:
+                        response_data["errors"][norm_path] = f"Could not read file, as total content size would exceed the safety limit ({max_total_size/1024:.1f}KB for model {current_model})."
                         continue
 
                     response_data["files_read"][norm_path] = content
@@ -1372,6 +1412,14 @@ def main_loop() -> None:
                 console.print(f"[red]⚠ Context critical: {context_info['token_usage_percent']:.1f}% used. Consider /clear-context or /context for details.[/red]")
             elif context_info["approaching_limit"] and len(conversation_history) % 20 == 0:
                 console.print(f"[yellow]⚠ Context high: {context_info['token_usage_percent']:.1f}% used. Use /context for details.[/yellow]")
+
+            # Final safety check before API call
+            final_context_info = get_context_usage_info(conversation_history, current_model)
+            if final_context_info["estimated_tokens"] > final_context_info["max_tokens"]:
+                console.print(f"[red]🚨 Final safety check failed: {final_context_info['estimated_tokens']} > {final_context_info['max_tokens']} tokens. Emergency truncation...[/red]")
+                conversation_history = smart_truncate_history(conversation_history, model_name=current_model)
+                final_context_info = get_context_usage_info(conversation_history, current_model)
+                console.print(f"[green]✓ Emergency truncation complete: {final_context_info['estimated_tokens']} tokens[/green]")
 
             # Make API call (testing non-streaming first)
             with console.status(f"[bold yellow]{model_name} is thinking...[/bold yellow]", spinner="dots"):

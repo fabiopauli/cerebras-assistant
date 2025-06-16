@@ -101,7 +101,7 @@ AGGRESSIVE_TRUNCATION_THRESHOLD = conversation_config.get("aggressive_truncation
 # Model-specific context limits
 MODEL_CONTEXT_LIMITS = {
     "llama-3.3-70b": 7000,  # Conservative limit for llama (8192 total - buffer for response)
-    "qwen-3-32b": 12000,    # Conservative limit for qwen (16382 total - buffer for response)
+    "qwen-3-32b": 10000,    # More conservative limit for qwen (16382 total - larger buffer for response and safety)
     "llama-4-scout-17b-16e-instruct": 7000,  # Conservative for scout model
 }
 
