@@ -110,7 +110,7 @@ def get_max_tokens_for_model(model_name: str) -> int:
     return MODEL_CONTEXT_LIMITS.get(model_name, 7000)  # Default to conservative limit
 
 model_config = config.get("models", {})
-DEFAULT_MODEL = model_config.get("default_model", "llama-3.3-70b")
+DEFAULT_MODEL = model_config.get("default_model", "llama-4-scout-17b-16e-instruct")
 REASONER_MODEL = model_config.get("reasoner_model", "qwen-3-32b")
 
 security_config = config.get("security", {})
