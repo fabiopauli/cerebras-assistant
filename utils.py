@@ -420,7 +420,7 @@ def read_local_file(file_path: str) -> str:
     Read content from a local file.
     
     Args:
-        file_path: Path to the file to read
+        file_path: Path to the file to read (should already be normalized/resolved)
         
     Returns:
         File content as string
@@ -429,8 +429,8 @@ def read_local_file(file_path: str) -> str:
         FileNotFoundError: If file doesn't exist
         UnicodeDecodeError: If file can't be decoded as UTF-8
     """
-    full_path = (base_dir / file_path).resolve()
-    with open(full_path, "r", encoding="utf-8") as f:
+    # Use the path directly since it should already be normalized by normalize_path()
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
 def add_file_context_smartly(conversation_history: List[Dict[str, Any]], file_path: str, content: str, max_context_files: int = MAX_CONTEXT_FILES) -> bool:

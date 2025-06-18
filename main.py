@@ -634,11 +634,8 @@ def try_handle_folder_command(user_input: str, conversation_history: List[Dict[s
                 return True
             old_base = base_dir
             base_dir = new_base
-            # Also change the actual working directory
-            os.chdir(new_base)
             console.print(f"[green]✓ Base directory changed from '{old_base}' to: '{base_dir}'[/green]")
             console.print(f"[green]  All relative paths will now be resolved against this directory.[/green]")
-            console.print(f"[green]  Working directory also changed to: '{os.getcwd()}'[/green]")
             
             # Add directory change to conversation context so the assistant knows
             dir_summary = get_directory_tree_summary(base_dir)
