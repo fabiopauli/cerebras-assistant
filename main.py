@@ -28,12 +28,13 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style as PromptStyle
 
 # Import our modules
+import config
 from config import (
-    os_info, base_dir, git_context, model_context, security_context,
+    os_info, git_context, model_context, security_context,
     ADD_COMMAND_PREFIX, COMMIT_COMMAND_PREFIX, GIT_BRANCH_COMMAND_PREFIX,
     FUZZY_AVAILABLE, DEFAULT_MODEL, REASONER_MODEL, tools, SYSTEM_PROMPT,
     MAX_FILES_IN_ADD_DIR, MAX_FILE_CONTENT_SIZE_CREATE, EXCLUDED_FILES, EXCLUDED_EXTENSIONS,
-    MAX_MULTIPLE_READ_SIZE, config
+    MAX_MULTIPLE_READ_SIZE
 )
 from utils import (
     console, detect_available_shells, get_context_usage_info, smart_truncate_history,
@@ -194,7 +195,7 @@ def stage_file(file_path_str: str) -> bool:
     if not git_context['enabled'] or git_context['skip_staging']: 
         return False
     try:
-        repo_root = base_dir
+        repo_root = config.base_dir
         abs_file_path = Path(file_path_str).resolve() 
         rel_path = abs_file_path.relative_to(repo_root)
         result = subprocess.run(["git", "add", str(rel_path)], cwd=str(repo_root), capture_output=True, text=True, check=False)
@@ -205,7 +206,7 @@ def stage_file(file_path_str: str) -> bool:
             console.print(f"[yellow]⚠ Failed to stage {rel_path}: {result.stderr.strip()}[/yellow]")
             return False
     except ValueError: 
-        console.print(f"[yellow]⚠ File {file_path_str} outside repo ({base_dir}), skipping staging[/yellow]")
+        console.print(f"[yellow]⚠ File {file_path_str} outside repo ({config.base_dir}), skipping staging[/yellow]")
         return False
     except Exception as e: 
         console.print(f"[red]✗ Error staging {file_path_str}: {e}[/red]")
@@ -221,7 +222,7 @@ def get_git_status_porcelain() -> Tuple[bool, List[Tuple[str, str]]]:
     if not git_context['enabled']: 
         return False, []
     try:
-        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True, cwd=str(base_dir))
+        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True, cwd=str(config.base_dir))
         if not result.stdout.strip(): 
             return False, []
         changed_files = []
@@ -251,7 +252,7 @@ def get_git_status_porcelain() -> Tuple[bool, List[Tuple[str, str]]]:
 
 def create_gitignore() -> None:
     """Create a comprehensive .gitignore file if it doesn't exist."""
-    gitignore_path = base_dir / ".gitignore"
+    gitignore_path = config.base_dir / ".gitignore"
     if gitignore_path.exists(): 
         console.print("[yellow]⚠ .gitignore exists, skipping.[/yellow]")
         return
@@ -305,13 +306,13 @@ def user_commit_changes(message: str) -> bool:
         
     try:
         # Check if there are any staged changes.
-        staged_check = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=str(base_dir))
+        staged_check = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=str(config.base_dir))
         
         # If exit code is 0, it means there are NO staged changes.
         if staged_check.returncode == 0:
             console.print("[yellow]No changes are staged for commit.[/yellow]")
             # Check if there are unstaged changes we can offer to add
-            unstaged_check = subprocess.run(["git", "diff", "--quiet"], cwd=str(base_dir))
+            unstaged_check = subprocess.run(["git", "diff", "--quiet"], cwd=str(config.base_dir))
             if unstaged_check.returncode != 0: # Unstaged changes exist
                 try:
                     confirm = prompt_session.prompt(
@@ -321,7 +322,7 @@ def user_commit_changes(message: str) -> bool:
                     
                     if confirm in ["y", "yes"]:
                         console.print("[dim]Staging all changes...[/dim]")
-                        subprocess.run(["git", "add", "-A"], cwd=str(base_dir), check=True)
+                        subprocess.run(["git", "add", "-A"], cwd=str(config.base_dir), check=True)
                     else:
                         console.print("[yellow]Commit aborted. Use `/git add <files>` to stage changes.[/yellow]")
                         return True
@@ -333,11 +334,11 @@ def user_commit_changes(message: str) -> bool:
                 return True
 
         # At this point, we know there are staged changes, so we can commit.
-        commit_res = subprocess.run(["git", "commit", "-m", message], cwd=str(base_dir), capture_output=True, text=True)
+        commit_res = subprocess.run(["git", "commit", "-m", message], cwd=str(config.base_dir), capture_output=True, text=True)
         
         if commit_res.returncode == 0:
             console.print(f"[green]✓ Committed successfully![/green]")
-            log_info = subprocess.run(["git", "log", "--oneline", "-1"], cwd=str(base_dir), capture_output=True, text=True).stdout.strip()
+            log_info = subprocess.run(["git", "log", "--oneline", "-1"], cwd=str(config.base_dir), capture_output=True, text=True).stdout.strip()
             if log_info:
                 console.print(f"[dim]Commit: {log_info}[/dim]")
             return True
@@ -361,7 +362,7 @@ def show_git_status_cmd() -> bool:
         console.print("[yellow]Git not enabled.[/yellow]")
         return True
     has_changes, files = get_git_status_porcelain()
-    branch_raw = subprocess.run(["git", "branch", "--show-current"], cwd=str(base_dir), capture_output=True, text=True)
+    branch_raw = subprocess.run(["git", "branch", "--show-current"], cwd=str(config.base_dir), capture_output=True, text=True)
     branch_msg = f"On branch {branch_raw.stdout.strip()}" if branch_raw.returncode == 0 and branch_raw.stdout.strip() else "Not on any branch?"
     console.print(Panel(branch_msg, title="Git Status", border_style="blue", expand=False))
     if not has_changes: 
@@ -403,19 +404,19 @@ def show_git_status_cmd() -> bool:
 
 def initialize_git_repo_cmd() -> bool:
     """Initialize a git repository."""
-    if (base_dir / ".git").exists(): 
+    if (config.base_dir / ".git").exists(): 
         console.print("[yellow]Git repo already exists.[/yellow]")
         git_context['enabled'] = True
         return True
     try:
-        subprocess.run(["git", "init"], cwd=str(base_dir), check=True, capture_output=True)
+        subprocess.run(["git", "init"], cwd=str(config.base_dir), check=True, capture_output=True)
         git_context['enabled'] = True
-        branch_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(base_dir), capture_output=True, text=True)
+        branch_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(config.base_dir), capture_output=True, text=True)
         git_context['branch'] = branch_res.stdout.strip() if branch_res.returncode == 0 else "main"
-        console.print(f"[green]✓ Initialized Git repo in {base_dir}/.git/ (branch: {git_context['branch']})[/green]")
-        if not (base_dir / ".gitignore").exists() and prompt_session.prompt("🔵 No .gitignore. Create one? (y/n, default y): ", default="y").strip().lower() in ["y", "yes"]: 
+        console.print(f"[green]✓ Initialized Git repo in {config.base_dir}/.git/ (branch: {git_context['branch']})[/green]")
+        if not (config.base_dir / ".gitignore").exists() and prompt_session.prompt("🔵 No .gitignore. Create one? (y/n, default y): ", default="y").strip().lower() in ["y", "yes"]: 
             create_gitignore()
-        elif git_context['enabled'] and (base_dir / ".gitignore").exists(): 
+        elif git_context['enabled'] and (config.base_dir / ".gitignore").exists(): 
             stage_file(".gitignore")
         if prompt_session.prompt(f"🔵 Initial commit? (y/n, default n): ", default="n").strip().lower() in ["y", "yes"]: 
             user_commit_changes("Initial commit")
@@ -435,16 +436,16 @@ def create_git_branch_cmd(branch_name: str) -> bool:
         console.print("[yellow]Branch name empty.[/yellow]")
         return True
     try:
-        existing_raw = subprocess.run(["git", "branch", "--list", branch_name], cwd=str(base_dir), capture_output=True, text=True)
+        existing_raw = subprocess.run(["git", "branch", "--list", branch_name], cwd=str(config.base_dir), capture_output=True, text=True)
         if existing_raw.stdout.strip():
             console.print(f"[yellow]Branch '{branch_name}' exists.[/yellow]")
-            current_raw = subprocess.run(["git", "branch", "--show-current"], cwd=str(base_dir), capture_output=True, text=True)
+            current_raw = subprocess.run(["git", "branch", "--show-current"], cwd=str(config.base_dir), capture_output=True, text=True)
             if current_raw.stdout.strip() != branch_name and prompt_session.prompt(f"🔵 Switch to '{branch_name}'? (y/n, default y): ", default="y").strip().lower() in ["y", "yes"]:
-                subprocess.run(["git", "checkout", branch_name], cwd=str(base_dir), check=True, capture_output=True)
+                subprocess.run(["git", "checkout", branch_name], cwd=str(config.base_dir), check=True, capture_output=True)
                 git_context['branch'] = branch_name
                 console.print(f"[green]✓ Switched to branch '{branch_name}'[/green]")
             return True
-        subprocess.run(["git", "checkout", "-b", branch_name], cwd=str(base_dir), check=True, capture_output=True)
+        subprocess.run(["git", "checkout", "-b", branch_name], cwd=str(config.base_dir), check=True, capture_output=True)
         git_context['branch'] = branch_name
         console.print(f"[green]✓ Created & switched to new branch '{branch_name}'[/green]")
         return True
@@ -598,25 +599,24 @@ def try_handle_clear_context_command(user_input: str, conversation_history: List
 
 def try_handle_folder_command(user_input: str, conversation_history: List[Dict[str, Any]]) -> bool:
     """Handle /folder command to manage base directory."""
-    global base_dir
     if user_input.strip().lower().startswith("/folder"):
         folder_path = user_input[len("/folder"):].strip()
         if not folder_path:
-            console.print(f"[yellow]Current base directory: '{base_dir}'[/yellow]")
+            console.print(f"[yellow]Current base directory: '{config.base_dir}'[/yellow]")
             console.print("[yellow]Usage: /folder <path> or /folder reset[/yellow]")
             return True
         if folder_path.lower() == "reset":
-            old_base = base_dir
+            old_base = config.base_dir
             current_cwd = Path.cwd()
-            base_dir = current_cwd
-            console.print(f"[green]✓ Base directory reset from '{old_base}' to: '{base_dir}'[/green]")
+            config.base_dir = current_cwd
+            console.print(f"[green]✓ Base directory reset from '{old_base}' to: '{config.base_dir}'[/green]")
             console.print(f"[green]  Synchronized with current working directory: '{current_cwd}'[/green]")
             
             # Add directory change to conversation context so the assistant knows
-            dir_summary = get_directory_tree_summary(base_dir)
+            dir_summary = get_directory_tree_summary(config.base_dir)
             conversation_history.append({
                 "role": "system",
-                "content": f"Working directory reset to: {base_dir}\n\nCurrent directory structure:\n\n{dir_summary}"
+                "content": f"Working directory reset to: {config.base_dir}\n\nCurrent directory structure:\n\n{dir_summary}"
             })
             
             return True
@@ -632,16 +632,16 @@ def try_handle_folder_command(user_input: str, conversation_history: List[Dict[s
             except PermissionError:
                 console.print(f"[red]✗ No write permissions in directory: '{new_base}'[/red]")
                 return True
-            old_base = base_dir
-            base_dir = new_base
-            console.print(f"[green]✓ Base directory changed from '{old_base}' to: '{base_dir}'[/green]")
+            old_base = config.base_dir
+            config.base_dir = new_base
+            console.print(f"[green]✓ Base directory changed from '{old_base}' to: '{config.base_dir}'[/green]")
             console.print(f"[green]  All relative paths will now be resolved against this directory.[/green]")
             
             # Add directory change to conversation context so the assistant knows
-            dir_summary = get_directory_tree_summary(base_dir)
+            dir_summary = get_directory_tree_summary(config.base_dir)
             conversation_history.append({
                 "role": "system",
-                "content": f"Working directory changed to: {base_dir}\n\nNew directory structure:\n\n{dir_summary}"
+                "content": f"Working directory changed to: {config.base_dir}\n\nNew directory structure:\n\n{dir_summary}"
             })
             
             return True
@@ -829,7 +829,7 @@ def try_handle_git_add_command(user_input: str) -> bool:
         for fp_str in file_paths:
             if fp_str == ".":
                 try:
-                    subprocess.run(["git", "add", "."], cwd=str(base_dir), check=True, capture_output=True)
+                    subprocess.run(["git", "add", "."], cwd=str(config.base_dir), check=True, capture_output=True)
                     console.print("[green]✓ Staged all changes in the current directory.[/green]")
                     return True
                 except subprocess.CalledProcessError as e:
@@ -899,7 +899,7 @@ def try_handle_add_command(user_input: str, conversation_history: List[Dict[str,
         
         # 1. Try direct path first
         try:
-            p = (base_dir / path_to_add).resolve()
+            p = (config.base_dir / path_to_add).resolve()
             if p.exists():
                 normalized_path = str(p)
             else:
@@ -908,11 +908,11 @@ def try_handle_add_command(user_input: str, conversation_history: List[Dict[str,
         except (FileNotFoundError, OSError):
             # 2. If direct path fails, try fuzzy finding
             console.print(f"[dim]Path '{path_to_add}' not found directly, attempting fuzzy search...[/dim]")
-            fuzzy_match = find_best_matching_file(base_dir, path_to_add)
+            fuzzy_match = find_best_matching_file(config.base_dir, path_to_add)
 
             if fuzzy_match:
                 # Optional: Confirm with user for better UX
-                relative_fuzzy = Path(fuzzy_match).relative_to(base_dir)
+                relative_fuzzy = Path(fuzzy_match).relative_to(config.base_dir)
                 confirm = prompt_session.prompt(f"🔵 Did you mean '[bright_cyan]{relative_fuzzy}[/bright_cyan]'? (Y/n): ", default="y").strip().lower()
                 if confirm in ["y", "yes"]:
                     normalized_path = fuzzy_match
@@ -968,19 +968,19 @@ def ensure_file_in_context(file_path: str, conversation_history: List[Dict[str, 
 
 def llm_git_init() -> str:
     """LLM tool handler for git init."""
-    if (base_dir / ".git").exists(): 
+    if (config.base_dir / ".git").exists(): 
         git_context['enabled'] = True
         return "Git repository already exists."
     try:
-        subprocess.run(["git", "init"], cwd=str(base_dir), check=True, capture_output=True)
+        subprocess.run(["git", "init"], cwd=str(config.base_dir), check=True, capture_output=True)
         git_context['enabled'] = True
-        branch_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(base_dir), capture_output=True, text=True)
+        branch_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(config.base_dir), capture_output=True, text=True)
         git_context['branch'] = branch_res.stdout.strip() if branch_res.returncode == 0 else "main"
-        if not (base_dir / ".gitignore").exists(): 
+        if not (config.base_dir / ".gitignore").exists(): 
             create_gitignore()
         elif git_context['enabled']: 
             stage_file(".gitignore")
-        return f"Git repository initialized successfully in {base_dir}/.git/ (branch: {git_context['branch']})."
+        return f"Git repository initialized successfully in {config.base_dir}/.git/ (branch: {git_context['branch']})."
 
     except (subprocess.CalledProcessError, FileNotFoundError) as e: 
         if isinstance(e, FileNotFoundError):
@@ -1031,13 +1031,13 @@ def llm_git_commit(message: str, require_confirmation: bool = True) -> str:
     
     try:
         # Check if there are staged changes
-        staged_check = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=str(base_dir))
+        staged_check = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=str(config.base_dir))
         if staged_check.returncode == 0: 
             return "No changes staged. Use git_add first."
         
         # Check for uncommitted changes in working directory
         if require_confirmation:
-            uncommitted_check = subprocess.run(["git", "diff", "--quiet"], cwd=str(base_dir))
+            uncommitted_check = subprocess.run(["git", "diff", "--quiet"], cwd=str(config.base_dir))
             if uncommitted_check.returncode != 0:
                 # There are uncommitted changes
                 try:
@@ -1056,7 +1056,7 @@ def llm_git_commit(message: str, require_confirmation: bool = True) -> str:
         # Show what will be committed
         staged_files = subprocess.run(
             ["git", "diff", "--staged", "--name-only"], 
-            cwd=str(base_dir), 
+            cwd=str(config.base_dir), 
             capture_output=True, 
             text=True
         ).stdout.strip()
@@ -1065,9 +1065,9 @@ def llm_git_commit(message: str, require_confirmation: bool = True) -> str:
             console.print(f"[dim]Committing files: {staged_files.replace(chr(10), ', ')}[/dim]")
         
         # Perform the commit
-        result = subprocess.run(["git", "commit", "-m", message], cwd=str(base_dir), capture_output=True, text=True)
+        result = subprocess.run(["git", "commit", "-m", message], cwd=str(config.base_dir), capture_output=True, text=True)
         if result.returncode == 0:
-            info_raw = subprocess.run(["git", "log", "-1", "--pretty=%h %s"], cwd=str(base_dir), capture_output=True, text=True).stdout.strip()
+            info_raw = subprocess.run(["git", "log", "-1", "--pretty=%h %s"], cwd=str(config.base_dir), capture_output=True, text=True).stdout.strip()
             return f"Committed successfully. Commit: {info_raw}"
         return f"Failed to commit: {result.stderr.strip()}"
         
@@ -1087,15 +1087,15 @@ def llm_git_create_branch(branch_name: str) -> str:
     if not bn: 
         return "Branch name empty."
     try:
-        exist_res = subprocess.run(["git", "rev-parse", "--verify", f"refs/heads/{bn}"], cwd=str(base_dir), capture_output=True, text=True)
+        exist_res = subprocess.run(["git", "rev-parse", "--verify", f"refs/heads/{bn}"], cwd=str(config.base_dir), capture_output=True, text=True)
         if exist_res.returncode == 0:
-            current_raw = subprocess.run(["git", "branch", "--show-current"], cwd=str(base_dir), capture_output=True, text=True)
+            current_raw = subprocess.run(["git", "branch", "--show-current"], cwd=str(config.base_dir), capture_output=True, text=True)
             if current_raw.stdout.strip() == bn: 
                 return f"Already on branch '{bn}'."
-            subprocess.run(["git", "checkout", bn], cwd=str(base_dir), check=True, capture_output=True, text=True)
+            subprocess.run(["git", "checkout", bn], cwd=str(config.base_dir), check=True, capture_output=True, text=True)
             git_context['branch'] = bn
             return f"Branch '{bn}' exists. Switched to it."
-        subprocess.run(["git", "checkout", "-b", bn], cwd=str(base_dir), check=True, capture_output=True, text=True)
+        subprocess.run(["git", "checkout", "-b", bn], cwd=str(config.base_dir), check=True, capture_output=True, text=True)
         git_context['branch'] = bn
         return f"Created & switched to new branch '{bn}'."
     except (subprocess.CalledProcessError, FileNotFoundError) as e: 
@@ -1108,7 +1108,7 @@ def llm_git_status() -> str:
     if not git_context['enabled']: 
         return "Git not initialized."
     try:
-        branch_res = subprocess.run(["git", "branch", "--show-current"], cwd=str(base_dir), capture_output=True, text=True)
+        branch_res = subprocess.run(["git", "branch", "--show-current"], cwd=str(config.base_dir), capture_output=True, text=True)
         branch_name = branch_res.stdout.strip() if branch_res.returncode == 0 and branch_res.stdout.strip() else "detached HEAD"
         has_changes, files = get_git_status_porcelain()
         if not has_changes: 
@@ -1217,7 +1217,7 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
 
                 except (OSError, ValueError) as e:
                     # Use the original path in the error if normalization fails
-                    error_key = str(base_dir / fp)
+                    error_key = str(config.base_dir / fp)
                     response_data["errors"][error_key] = str(e)
 
             # Return a JSON string, which is much easier for the LLM to parse reliably
@@ -1245,14 +1245,16 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
             
         elif func_name == "edit_file":
             fp = args["file_path"]
+            # Normalize the path relative to base_dir
+            norm_fp = normalize_path(fp)
             # Check if file exists before editing
-            if not Path(fp).exists():
-                return f"Error: File '{fp}' does not exist."
+            if not Path(norm_fp).exists():
+                return f"Error: File '{norm_fp}' does not exist."
             try: 
-                apply_fuzzy_diff_edit(fp, args["original_snippet"], args["new_snippet"])
-                return f"Edit applied successfully to '{fp}'. Check console for details."
+                apply_fuzzy_diff_edit(norm_fp, args["original_snippet"], args["new_snippet"])
+                return f"Edit applied successfully to '{norm_fp}'. Check console for details."
             except Exception as e:
-                return f"Error during edit_file call for '{fp}': {e}."
+                return f"Error during edit_file call for '{norm_fp}': {e}."
                 
         elif func_name == "git_init": 
             return llm_git_init()
@@ -1280,7 +1282,7 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
                     console.print("[red]Execution denied by user.[/red]")
                     return "PowerShell command execution was denied by the user."
             
-            output, error = run_powershell_command(command)
+            output, error = run_powershell_command(command, config.base_dir)
             if error:
                 return f"PowerShell Error:\n{error}"
             return f"PowerShell Output:\n{output}"
@@ -1300,7 +1302,7 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
                     console.print("[red]Execution denied by user.[/red]")
                     return "Bash command execution was denied by the user."
             
-            output, error = run_bash_command(command)
+            output, error = run_bash_command(command, config.base_dir)
             if error:
                 return f"Bash Error:\n{error}"
             return f"Bash Output:\n{output}"
@@ -1327,14 +1329,14 @@ def initialize_application() -> None:
     # Detect available shells
     detect_available_shells()
     
-    if (base_dir / ".git").exists() and (base_dir / ".git").is_dir():
+    if (config.base_dir / ".git").exists() and (config.base_dir / ".git").is_dir():
         git_context['enabled'] = True
         try:
-            res = subprocess.run(["git", "branch", "--show-current"], cwd=str(base_dir), capture_output=True, text=True, check=False)
+            res = subprocess.run(["git", "branch", "--show-current"], cwd=str(config.base_dir), capture_output=True, text=True, check=False)
             if res.returncode == 0 and res.stdout.strip(): 
                 git_context['branch'] = res.stdout.strip()
             else:
-                init_branch_res = subprocess.run(["git", "config", "init.defaultBranch"], cwd=str(base_dir), capture_output=True, text=True)
+                init_branch_res = subprocess.run(["git", "config", "init.defaultBranch"], cwd=str(config.base_dir), capture_output=True, text=True)
                 git_context['branch'] = init_branch_res.stdout.strip() if init_branch_res.returncode == 0 and init_branch_res.stdout.strip() else "main"
         except FileNotFoundError: 
             console.print("[yellow]Git not found. Git features disabled.[/yellow]")
@@ -1350,7 +1352,7 @@ def main_loop() -> None:
     ]
     
     # Add initial context
-    dir_summary = get_directory_tree_summary(base_dir)
+    dir_summary = get_directory_tree_summary(config.base_dir)
     conversation_history.append({
         "role": "system",
         "content": f"Project directory structure at startup:\n\n{dir_summary}"

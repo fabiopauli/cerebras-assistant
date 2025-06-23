@@ -20,8 +20,9 @@ from rich.table import Table
 from rich.panel import Panel
 
 # Import configuration
+import config
 from config import (
-    os_info, base_dir, git_context, model_context, security_context,
+    os_info, git_context, model_context, security_context,
     FUZZY_AVAILABLE, MIN_FUZZY_SCORE, MIN_EDIT_SCORE, MAX_FILE_CONTENT_SIZE_CREATE,
     ESTIMATED_MAX_TOKENS, CONTEXT_WARNING_THRESHOLD, AGGRESSIVE_TRUNCATION_THRESHOLD,
     MAX_HISTORY_MESSAGES, MAX_CONTEXT_FILES, MAX_MULTIPLE_READ_SIZE,
@@ -370,24 +371,24 @@ def normalize_path(path_str: str, allow_outside_project: bool = False) -> str:
             else:
                 resolved_p = p.resolve()
         else:
-            # For relative paths, resolve against base_dir instead of cwd
-            base_path = base_dir / p
+            # For relative paths, resolve against config.base_dir instead of cwd
+            base_path = config.base_dir / p
             if base_path.exists() or base_path.is_symlink():
                 resolved_p = base_path.resolve(strict=True)
             else:
                 resolved_p = base_path.resolve()
                 
     except (FileNotFoundError, RuntimeError): 
-        # Fallback: resolve relative to base_dir
+        # Fallback: resolve relative to config.base_dir
         p = Path(path_str)
         if p.is_absolute():
             resolved_p = p.resolve()
         else:
-            resolved_p = (base_dir / p).resolve()
+            resolved_p = (config.base_dir / p).resolve()
     
     # Security validation: ensure path is within project directory
     if not allow_outside_project:
-        base_resolved = base_dir.resolve()
+        base_resolved = config.base_dir.resolve()
         try:
             # Check if the resolved path is within the base directory
             resolved_p.relative_to(base_resolved)
@@ -662,10 +663,14 @@ def apply_fuzzy_diff_edit(path: str, original_snippet: str, new_snippet: str) ->
 # SHELL COMMAND UTILITIES
 # =============================================================================
 
-def run_bash_command(command: str) -> Tuple[str, str]:
+def run_bash_command(command: str, cwd: Optional[Union[str, Path]] = None) -> Tuple[str, str]:
     """
     Run a bash command and return (stdout, stderr).
     Includes platform checks to ensure bash is available.
+    
+    Args:
+        command: The bash command to execute
+        cwd: Working directory for the command (defaults to config.base_dir if None)
     """
     # Check if we're on a supported platform
     current_platform = platform.system()
@@ -710,6 +715,11 @@ def run_bash_command(command: str) -> Tuple[str, str]:
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         return "", f"Bash not found on {current_platform}: {e}"
     
+    # Set working directory - use config.base_dir if cwd not specified
+    if cwd is None:
+        cwd = config.base_dir
+    working_dir = str(Path(cwd).resolve())
+    
     # Execute the actual command
     try:
         if bash_executable == "wsl":
@@ -718,14 +728,16 @@ def run_bash_command(command: str) -> Tuple[str, str]:
                 ["wsl", "bash", "-c", command],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                cwd=working_dir
             )
         else:
             completed = subprocess.run(
                 [bash_executable, "-c", command],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                cwd=working_dir
             )
         return completed.stdout, completed.stderr
     except subprocess.TimeoutExpired:
@@ -733,10 +745,14 @@ def run_bash_command(command: str) -> Tuple[str, str]:
     except Exception as e:
         return "", f"Error executing bash command: {e}"
 
-def run_powershell_command(command: str) -> Tuple[str, str]:
+def run_powershell_command(command: str, cwd: Optional[Union[str, Path]] = None) -> Tuple[str, str]:
     """
     Run a PowerShell command and return (stdout, stderr).
     Includes platform checks to ensure PowerShell is available.
+    
+    Args:
+        command: The PowerShell command to execute
+        cwd: Working directory for the command (defaults to config.base_dir if None)
     """
     # Check if we're on a supported platform
     current_platform = platform.system()
@@ -776,13 +792,19 @@ def run_powershell_command(command: str) -> Tuple[str, str]:
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         return "", f"PowerShell not found on {current_platform}: {e}"
     
+    # Set working directory - use config.base_dir if cwd not specified
+    if cwd is None:
+        cwd = config.base_dir
+    working_dir = str(Path(cwd).resolve())
+    
     # Execute the actual command
     try:
         completed = subprocess.run(
             [pwsh_executable, "-Command", command],
             capture_output=True,
             text=True,
-            timeout=30  # 30 second timeout for safety
+            timeout=30,  # 30 second timeout for safety
+            cwd=working_dir
         )
         return completed.stdout, completed.stderr
     except subprocess.TimeoutExpired:
