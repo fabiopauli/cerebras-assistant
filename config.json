@@ -11,7 +11,7 @@
   },
   "conversation": {
     "max_history_messages": 50,
-    "max_context_files": 5,
+    "max_context_files": 10,
     "estimated_max_tokens": 33000,
     "tokens_per_message_estimate": 200,
     "tokens_per_file_kb": 300,
@@ -20,7 +20,7 @@
   },
   "models": {
     "default_model": "llama-4-scout-17b-16e-instruct",
-    "reasoner_model": "qwen-3-32b"
+    "reasoner_model": "qwen-3-235b-a22b"
   },
   "security": {
     "require_powershell_confirmation": true,

@@ -10,7 +10,7 @@ Cerebras AI Code Assistant is an enhanced command-line interface built on top of
 
 ### 🤖 **AI-Powered Development**
 - **Conversational Interface**: Interactive chat with advanced Cerebras AI models
-- **Dual Model Support**: Toggle between chat model (`llama-4-scout-17b-16e-instruct`) and reasoning model (`qwen-3-32b`)
+- **Dual Model Support**: Toggle between chat model (`llama-4-scout-17b-16e-instruct`) and reasoning model (`qwen-3-235b`) (Adjust config.json to change models)
 - **Function Calling**: AI can automatically execute tools and operations
 - **Streaming Responses**: Real-time AI response with rich formatting
 
@@ -85,7 +85,7 @@ Cerebras AI Code Assistant is an enhanced command-line interface built on top of
    ```bash
    python main.py
    ```
-   Important: Use /reasoner command to change to qwen-3-32b that works better in this assistant !
+   Important: Use /reasoner command to change to qwen-3-235b that works better in this assistant !
    
 
 ## Usage
@@ -123,7 +123,7 @@ The assistant supports both natural language conversation and special commands:
 ```bash
 /git init
 /git add .
-/commit "Initial commit with source files"
+/git commit "Initial commit with source files"
 /git branch feature/new-feature
 ```
 
@@ -147,8 +147,8 @@ The assistant can automatically execute these operations:
 ## Configuration
 
 ### Model Configuration
-- **Default Chat Model**: `llama3.1-70b`
-- **Reasoning Model**: `llama3.3-70b`
+- **Default Chat Model**: `llama-4-scout-17b-16e-instruct`
+Reasoning Model: `qwen-3-235b-a22b`
 
 ### Fuzzy Matching Thresholds
 - **File Path Matching**: 80% similarity minimum
