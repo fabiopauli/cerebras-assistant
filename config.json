@@ -19,8 +19,8 @@
     "aggressive_truncation_threshold": 0.9
   },
   "models": {
-    "default_model": "llama-4-scout-17b-16e-instruct",
-    "reasoner_model": "qwen-3-235b-a22b"
+    "default_model": "qwen-3-32b",
+    "reasoner_model": "qwen-3-235b-a22b-instruct-2507"
   },
   "security": {
     "require_powershell_confirmation": true,

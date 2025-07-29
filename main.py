@@ -1251,8 +1251,16 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
             if not Path(norm_fp).exists():
                 return f"Error: File '{norm_fp}' does not exist."
             try: 
+                # Read the file before editing to show the change
+                content_before = read_local_file(norm_fp)
                 apply_fuzzy_diff_edit(norm_fp, args["original_snippet"], args["new_snippet"])
-                return f"Edit applied successfully to '{norm_fp}'. Check console for details."
+                content_after = read_local_file(norm_fp)
+                
+                # Check if the edit actually changed the file
+                if content_before == content_after:
+                    return f"No changes made to '{norm_fp}'. The original snippet was not found or the content is already as specified."
+                else:
+                    return f"Successfully edited '{norm_fp}'. The file has been updated with the new content."
             except Exception as e:
                 return f"Error during edit_file call for '{norm_fp}': {e}."
                 
@@ -1285,7 +1293,12 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
             output, error = run_powershell_command(command, config.base_dir)
             if error:
                 return f"PowerShell Error:\n{error}"
-            return f"PowerShell Output:\n{output}"
+            
+            # Handle empty output more clearly for the model
+            if not output.strip():
+                return f"PowerShell command executed successfully. No output produced (this is normal for commands like Remove-Item, New-Item, etc.)."
+            else:
+                return f"PowerShell Output:\n{output}"
         elif func_name == "run_bash":
             command = args["command"]
             
@@ -1305,7 +1318,12 @@ def execute_function_call_dict(tool_call_dict: Dict[str, Any]) -> str:
             output, error = run_bash_command(command, config.base_dir)
             if error:
                 return f"Bash Error:\n{error}"
-            return f"Bash Output:\n{output}"
+            
+            # Handle empty output more clearly for the model
+            if not output.strip():
+                return f"Bash command executed successfully. No output produced (this is normal for commands like rm, mkdir, etc.)."
+            else:
+                return f"Bash Output:\n{output}"
         else: 
             return f"Unknown LLM function: {func_name}"
             
@@ -1396,7 +1414,7 @@ def main_loop() -> None:
             
             # Determine which model to use
             current_model = model_context['current_model']
-            model_name = "Qwen" if model_context['is_reasoner'] else "Llama"
+            model_name = "Qwen"  # Both default and reasoner models are now Qwen variants
             
             # Check context usage and force truncation if needed
             context_info = get_context_usage_info(conversation_history, current_model)

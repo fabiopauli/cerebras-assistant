@@ -10,7 +10,7 @@ Cerebras AI Code Assistant is an enhanced command-line interface built on top of
 
 ### 🤖 **AI-Powered Development**
 - **Conversational Interface**: Interactive chat with advanced Cerebras AI models
-- **Dual Model Support**: Toggle between chat model (`llama-4-scout-17b-16e-instruct`) and reasoning model (`qwen-3-235b`) (Adjust config.json to change models)
+- **Dual Model Support**: Toggle between chat model (`qwen-3-32b`) and reasoning model (`qwen-3-235b-a22b-instruct-2507`) (Adjust config.json to change models)
 - **Function Calling**: AI can automatically execute tools and operations
 - **Streaming Responses**: Real-time AI response with rich formatting
 
