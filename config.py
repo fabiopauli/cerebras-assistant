@@ -101,13 +101,14 @@ AGGRESSIVE_TRUNCATION_THRESHOLD = conversation_config.get("aggressive_truncation
 # Model-specific context limits
 MODEL_CONTEXT_LIMITS = {
     "llama-3.3-70b": 7000,  # Conservative limit for llama (8192 total - buffer for response)
-    "qwen-3-32b": 12000,    # More conservative limit for qwen (16382 total - larger buffer for response and safety)
+    "qwen-3-32b": 12000,
+    "qwen-3-235b": 41000,
     "llama-4-scout-17b-16e-instruct": 7000,  # Conservative for scout model
 }
 
 def get_max_tokens_for_model(model_name: str) -> int:
     """Get the maximum context tokens for a specific model."""
-    return MODEL_CONTEXT_LIMITS.get(model_name, 7000)  # Default to conservative limit
+    return MODEL_CONTEXT_LIMITS.get(model_name, 41000)  # Default to conservative limit
 
 model_config = config.get("models", {})
 DEFAULT_MODEL = model_config.get("default_model", "llama-4-scout-17b-16e-instruct")

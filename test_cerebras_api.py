@@ -16,3 +16,5 @@ print(client.models.list())
 
 # Retrieve a specific model (qwen-3-32b)
 print(client.models.retrieve("qwen-3-32b"))
+print(client.models.retrieve("qwen-3-235b-a22b"))
+print(client.models.retrieve("qwen-3-235b-a22b-instruct-2507"))

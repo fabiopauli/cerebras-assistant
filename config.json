@@ -3,16 +3,16 @@
     "max_files_in_add_dir": 1000,
     "max_file_size_in_add_dir": 5000000,
     "max_file_content_size_create": 5000000,
-    "max_multiple_read_size": 100000
+    "max_multiple_read_size": 1000000
   },
   "fuzzy_matching": {
     "min_fuzzy_score": 80,
     "min_edit_score": 85
   },
   "conversation": {
-    "max_history_messages": 50,
-    "max_context_files": 10,
-    "estimated_max_tokens": 33000,
+    "max_history_messages": 500,
+    "max_context_files": 100,
+    "estimated_max_tokens": 41000,
     "tokens_per_message_estimate": 200,
     "tokens_per_file_kb": 300,
     "context_warning_threshold": 0.8,
