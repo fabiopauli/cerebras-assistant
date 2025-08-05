@@ -2,7 +2,25 @@
 
 """
 Main application for Cerebras Assistant
-Handles commands, conversation flow, and AI interactions
+        # Sanitize tools for current model (remove unsupported fields like 'strict')
+        sanitized_tools = []
+        for tool in tools:
+            clean_tool = tool.copy()
+            func = clean_tool["function"].copy()
+            func.pop("strict", None)  # Remove 'strict' if present
+            clean_tool["function"] = func
+            sanitized_tools.append(clean_tool)
+            
+        kwargs = {
+            "model": current_model,
+            "messages": conversation_history,
+            "tools": sanitized_tools,
+            "tool_choice": "auto",
+            "stream": False,
+            "max_completion_tokens": 5000,
+            "temperature": 0.7,
+            "top_p": 1
+        }
 """
 
 import os
