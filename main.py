@@ -1440,17 +1440,21 @@ def main_loop() -> None:
 
             # Make API call (testing non-streaming first)
             with console.status(f"[bold yellow]{model_name} is thinking...[/bold yellow]", spinner="dots"):
-                response = client.chat.completions.create(
-                    model=current_model,
-                    messages=conversation_history,
-                    tools=tools,
-                    tool_choice="auto",
-                    parallel_tool_calls=False,
-                    stream=False,  # Changed to non-streaming for testing
-                    max_completion_tokens=5000,
-                    temperature=0.7,
-                    top_p=1
-                )
+                kwargs = {
+                    "model": current_model,
+                    "messages": conversation_history,
+                    "tools": tools,
+                    "tool_choice": "auto",
+                    "stream": False,
+                    "max_completion_tokens": 5000,
+                    "temperature": 0.7,
+                    "top_p": 1
+                }
+                # Only include parallel_tool_calls if model supports it
+                if current_model in ["qwen-3-32b", "qwen-3-235b-a22b-instruct-2507"]:
+                    kwargs["parallel_tool_calls"] = False
+                
+                response = client.chat.completions.create(**kwargs)
             
             # Process non-streaming response
             message = response.choices[0].message
@@ -1510,7 +1514,7 @@ def main_loop() -> None:
                     })
                 
                 # Now let the assistant continue with the tool results
-                max_continuation_rounds = 5
+                max_continuation_rounds = 15
                 current_round = 0
                 
                 while current_round < max_continuation_rounds:
