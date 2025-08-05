@@ -1431,7 +1431,7 @@ def main_loop() -> None:
             
             # Determine which model to use
             current_model = model_context['current_model']
-            model_name = "Qwen"  # Both default and reasoner models are now Qwen variants
+            model_name = "GPT OSS" if current_model == DEFAULT_MODEL else "Qwen"
             
             # Check context usage and force truncation if needed
             context_info = get_context_usage_info(conversation_history, current_model)
