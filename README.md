@@ -85,7 +85,6 @@ Cerebras AI Code Assistant is an enhanced command-line interface built on top of
    ```bash
    python main.py
    ```
-   Important: Use /reasoner command to change to qwen-3-235b that works better in this assistant !
    
 
 ## Usage
@@ -145,10 +144,6 @@ The assistant can automatically execute these operations:
 3. **System Operations**: `run_powershell` (with security confirmation)
 
 ## Configuration
-
-### Model Configuration
-- **Default Chat Model**: `llama-4-scout-17b-16e-instruct`
-Reasoning Model: `qwen-3-235b-a22b`
 
 ### Fuzzy Matching Thresholds
 - **File Path Matching**: 80% similarity minimum
