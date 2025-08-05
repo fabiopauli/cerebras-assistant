@@ -253,7 +253,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "strict": True,
             "description": "Read the content of a single file from the filesystem",
             "parameters": {
                 "type": "object",
@@ -266,7 +265,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "read_multiple_files",
-            "strict": True,
             "description": "Read the content of multiple files",
             "parameters": {
                 "type": "object",
@@ -279,7 +277,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "create_file",
-            "strict": True,
             "description": "Create or overwrite a file",
             "parameters": {
                 "type": "object",
@@ -295,7 +292,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "create_multiple_files",
-            "strict": True,
             "description": "Create multiple files",
             "parameters": {
                 "type": "object",
@@ -318,7 +314,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "strict": True,
             "description": "Edit a file by replacing a snippet (supports fuzzy matching)",
             "parameters": {
                 "type": "object",
@@ -335,7 +330,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "git_init",
-            "strict": True,
             "description": "Initialize a new Git repository.",
             "parameters": {"type": "object", "properties": {}, "required": []}
         }
@@ -344,7 +338,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "git_commit",
-            "strict": True,
             "description": "Commit staged changes with a message.",
             "parameters": {
                 "type": "object",
@@ -357,7 +350,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "git_create_branch",
-            "strict": True,
             "description": "Create and switch to a new Git branch.",
             "parameters": {
                 "type": "object",
@@ -370,7 +362,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "git_status",
-            "strict": True,
             "description": "Show current Git status.",
             "parameters": {"type": "object", "properties": {}, "required": []}
         }
@@ -379,7 +370,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "git_add",
-            "strict": True,
             "description": "Stage files for commit.",
             "parameters": {
                 "type": "object",
@@ -392,7 +382,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "run_powershell",
-            "strict": True,
             "description": "Run a PowerShell command with security confirmation (Windows/Cross-platform PowerShell Core).",
             "parameters": {
                 "type": "object",
@@ -410,7 +399,6 @@ tools = [
         "type": "function",
         "function": {
             "name": "run_bash",
-            "strict": True,
             "description": "Run a bash command with security confirmation (macOS/Linux/WSL).",
             "parameters": {
                 "type": "object",

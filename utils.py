@@ -32,8 +32,31 @@ from config import (
 if FUZZY_AVAILABLE:
     from thefuzz import fuzz, process as fuzzy_process
 
+# Tiktoken for accurate token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+
 # Initialize Rich console
 console = Console()
+
+# Token count cache for performance optimization
+_token_cache = {}
+
+def _get_cache_key(content: str, content_type: str = "content") -> str:
+    """Generate a cache key for token counting."""
+    return f"{content_type}:{hash(content)}"
+
+def clear_token_cache() -> None:
+    """Clear the token counting cache to free memory."""
+    global _token_cache
+    _token_cache.clear()
+
+def get_token_cache_size() -> int:
+    """Get the current size of the token cache."""
+    return len(_token_cache)
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -72,12 +95,13 @@ def detect_available_shells() -> None:
     if os_info['is_windows']:
         os_info['shell_available']['cmd'] = True
 
-def estimate_token_usage(conversation_history: List[Dict[str, Any]]) -> Tuple[int, Dict[str, int]]:
+def estimate_token_usage(conversation_history: List[Dict[str, Any]], model_name: str = None) -> Tuple[int, Dict[str, int]]:
     """
-    Estimate token usage for the conversation history.
+    Estimate token usage for the conversation history using tiktoken for accurate counting.
     
     Args:
         conversation_history: List of conversation messages
+        model_name: Model name for encoding selection (optional)
         
     Returns:
         Tuple of (total_estimated_tokens, breakdown_by_role)
@@ -85,18 +109,74 @@ def estimate_token_usage(conversation_history: List[Dict[str, Any]]) -> Tuple[in
     token_breakdown = {"system": 0, "user": 0, "assistant": 0, "tool": 0}
     total_tokens = 0
     
+    # Clean cache if it gets too large (prevent memory bloat)
+    if len(_token_cache) > 1000:
+        _token_cache.clear()
+    
+    # Get appropriate encoding
+    if TIKTOKEN_AVAILABLE:
+        try:
+            # Use cl100k_base encoding which is used by GPT-4, GPT-3.5, and most modern models
+            encoding = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            # Fallback to basic encoding if cl100k_base fails
+            encoding = tiktoken.get_encoding("gpt2")
+    else:
+        encoding = None
+    
     for msg in conversation_history:
         role = msg.get("role", "unknown")
         content = msg.get("content", "")
         
-        # Basic token estimation: roughly 4 characters per token for English text
-        content_tokens = len(content) // 4
-        
-        # Add extra tokens for tool calls and structured data
-        if msg.get("tool_calls"):
-            content_tokens += len(str(msg["tool_calls"])) // 4
-        if msg.get("tool_call_id"):
-            content_tokens += 10  # Small overhead for tool metadata
+        if encoding and TIKTOKEN_AVAILABLE:
+            # Accurate token counting with tiktoken using cache
+            try:
+                # Check cache for content tokens
+                content_key = _get_cache_key(content, "content")
+                if content_key in _token_cache:
+                    content_tokens = _token_cache[content_key]
+                else:
+                    content_tokens = len(encoding.encode(content)) if content else 0
+                    _token_cache[content_key] = content_tokens
+                
+                # Add extra tokens for tool calls and structured data
+                if msg.get("tool_calls"):
+                    tool_calls_str = str(msg["tool_calls"])
+                    tool_calls_key = _get_cache_key(tool_calls_str, "tool_calls")
+                    if tool_calls_key in _token_cache:
+                        content_tokens += _token_cache[tool_calls_key]
+                    else:
+                        tool_tokens = len(encoding.encode(tool_calls_str))
+                        _token_cache[tool_calls_key] = tool_tokens
+                        content_tokens += tool_tokens
+                
+                if msg.get("tool_call_id"):
+                    # More accurate estimation for tool metadata
+                    tool_id_str = str(msg.get("tool_call_id", ""))
+                    name_str = str(msg.get("name", ""))
+                    meta_str = tool_id_str + name_str
+                    meta_key = _get_cache_key(meta_str, "tool_meta")
+                    if meta_key in _token_cache:
+                        content_tokens += _token_cache[meta_key]
+                    else:
+                        meta_tokens = len(encoding.encode(meta_str)) + 5  # Small overhead
+                        _token_cache[meta_key] = meta_tokens
+                        content_tokens += meta_tokens
+                    
+            except Exception:
+                # Fallback to character-based estimation if tiktoken fails
+                content_tokens = len(content) // 4
+                if msg.get("tool_calls"):
+                    content_tokens += len(str(msg["tool_calls"])) // 4
+                if msg.get("tool_call_id"):
+                    content_tokens += 10
+        else:
+            # Fallback to original character-based estimation when tiktoken unavailable
+            content_tokens = len(content) // 4
+            if msg.get("tool_calls"):
+                content_tokens += len(str(msg["tool_calls"])) // 4
+            if msg.get("tool_call_id"):
+                content_tokens += 10
             
         token_breakdown[role] = token_breakdown.get(role, 0) + content_tokens
         total_tokens += content_tokens
@@ -112,7 +192,7 @@ def get_context_usage_info(conversation_history: List[Dict[str, Any]], model_nam
     """
     from config import get_max_tokens_for_model
     
-    total_tokens, breakdown = estimate_token_usage(conversation_history)
+    total_tokens, breakdown = estimate_token_usage(conversation_history, model_name)
     file_contexts = sum(1 for msg in conversation_history if msg["role"] == "system" and "User added file" in msg["content"])
     
     # Use model-specific context limit if available
@@ -204,7 +284,7 @@ def smart_truncate_history(conversation_history: List[Dict[str, Any]], max_messa
         essential_system.extend(kept_file_contexts)
     
     # Calculate remaining token budget for conversation messages
-    system_tokens, _ = estimate_token_usage(essential_system)
+    system_tokens, _ = estimate_token_usage(essential_system, model_name)
     remaining_tokens = target_tokens - system_tokens
     
     # Work backwards through conversation messages, preserving tool call sequences
@@ -263,7 +343,7 @@ def smart_truncate_history(conversation_history: List[Dict[str, Any]], max_messa
     result = essential_system + keep_messages
     
     # Log truncation results
-    final_tokens, _ = estimate_token_usage(result)
+    final_tokens, _ = estimate_token_usage(result, model_name)
     console.print(f"[dim]Context truncated: {len(conversation_history)} → {len(result)} messages, ~{current_tokens} → ~{final_tokens} tokens[/dim]")
     
     return result
@@ -462,30 +542,28 @@ def add_file_context_smartly(conversation_history: List[Dict[str, Any]], file_pa
         console.print(f"[yellow]⚠ File '{file_path}' too large ({content_size_kb:.1f}KB, ~{estimated_tokens} tokens). Limit is 80% of context window.[/yellow]")
         return False
 
-    # Check if the last assistant message has pending tool calls
-    # If so, defer adding file context until after tool responses are complete
+    # Check if there are any pending tool calls that haven't been responded to
+    # If so, defer adding file context to avoid interrupting tool call sequences
     if conversation_history:
-        last_msg = conversation_history[-1]
-        if (last_msg.get("role") == "assistant" and 
-            last_msg.get("tool_calls") and 
-            len(conversation_history) > 0):
-            
-            # Check if all tool calls have corresponding responses
-            tool_call_ids = {tc["id"] for tc in last_msg["tool_calls"]}
-            
-            # Count tool responses after this assistant message
-            responses_after = 0
-            for i in range(len(conversation_history) - 1, -1, -1):
-                msg = conversation_history[i]
-                if msg.get("role") == "tool" and msg.get("tool_call_id") in tool_call_ids:
-                    responses_after += 1
-                elif msg == last_msg:
-                    break
-            
-            # If not all tool calls have responses, defer the file context addition
-            if responses_after < len(tool_call_ids):
-                console.print(f"[dim]Deferring file context addition for '{Path(file_path).name}' until tool responses complete[/dim]")
-                return True  # Return True but don't add yet
+        # Look for the most recent assistant message with tool calls
+        pending_tool_calls = set()
+        
+        # Go through messages in reverse to find pending tool calls
+        for msg in reversed(conversation_history):
+            if msg.get("role") == "tool" and msg.get("tool_call_id"):
+                # Remove this tool call ID from pending set
+                pending_tool_calls.discard(msg.get("tool_call_id"))
+            elif msg.get("role") == "assistant" and msg.get("tool_calls"):
+                # Add all tool call IDs from this assistant message to pending set
+                for tc in msg["tool_calls"]:
+                    pending_tool_calls.add(tc["id"])
+                # Stop at the first assistant message with tool calls (most recent sequence)
+                break
+        
+        # If there are still pending tool calls, defer file context addition
+        if pending_tool_calls:
+            console.print(f"[dim]Deferring file context addition for '{Path(file_path).name}' until {len(pending_tool_calls)} tool responses complete[/dim]")
+            return True  # Return True but don't add yet
 
     # Remove any existing context for this exact file to avoid duplicates
     conversation_history[:] = [
@@ -520,12 +598,37 @@ def add_file_context_smartly(conversation_history: List[Dict[str, Any]], file_pa
         conversation_history[:] = [msg for msg in conversation_history if msg != to_remove[0]]
 
     # Find the right position to insert the file context
-    # Insert before the last user message or at the end if no user messages
+    # Insert after system messages but before the most recent conversation turn
     insertion_point = len(conversation_history)
+    
+    # Find the start of the most recent conversation turn (user message + any responses)
     for i in range(len(conversation_history) - 1, -1, -1):
-        if conversation_history[i].get("role") == "user":
+        msg = conversation_history[i]
+        if msg.get("role") == "user":
+            # Found a user message, insert before it (but after any preceding system messages)
             insertion_point = i
             break
+        elif msg.get("role") == "system":
+            # If we hit a system message without finding a user message, insert after system messages
+            insertion_point = i + 1
+            break
+    
+    # Ensure we don't insert in the middle of tool call sequences
+    # If the insertion point would break a tool sequence, move it to a safer position
+    if insertion_point < len(conversation_history):
+        # Check if we're inserting between an assistant message with tool calls and tool responses
+        if insertion_point > 0:
+            prev_msg = conversation_history[insertion_point - 1]
+            if (prev_msg.get("role") == "assistant" and prev_msg.get("tool_calls")):
+                # Find the end of this tool sequence
+                tool_call_ids = {tc["id"] for tc in prev_msg["tool_calls"]}
+                for j in range(insertion_point, len(conversation_history)):
+                    msg = conversation_history[j]
+                    if msg.get("role") == "tool" and msg.get("tool_call_id") in tool_call_ids:
+                        tool_call_ids.discard(msg.get("tool_call_id"))
+                        if not tool_call_ids:  # All tool calls have responses
+                            insertion_point = j + 1
+                            break
 
     # Add new file context at the appropriate position
     new_context_msg = {
