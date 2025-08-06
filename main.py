@@ -1463,7 +1463,7 @@ def main_loop() -> None:
                     "tools": tools,
                     "tool_choice": "auto",
                     "stream": False,
-                    "max_completion_tokens": 5000,
+                    "max_completion_tokens": 10000,
                     "temperature": 0.7,
                     "top_p": 1
                 }
@@ -1538,16 +1538,21 @@ def main_loop() -> None:
                     current_round += 1
                     
                     with console.status(f"[bold yellow]{model_name} is processing results...[/bold yellow]", spinner="dots"):
-                        continue_response = client.chat.completions.create(
-                            model=current_model, 
-                            messages=conversation_history,
-                            tools=tools,
-                            tool_choice="auto",
-                                    stream=False,
-                            max_completion_tokens=5000,
-                            temperature=0.7,
-                            top_p=1
-                        )
+                        continue_kwargs = {
+                            "model": current_model, 
+                            "messages": conversation_history,
+                            "tools": tools,
+                            "tool_choice": "auto",
+                            "stream": False,
+                            "max_completion_tokens": 5000,
+                            "temperature": 0.7,
+                            "top_p": 1
+                        }
+                        # Only include parallel_tool_calls if model supports it
+                        if current_model in ["qwen-3-32b", "qwen-3-235b-a22b-instruct-2507"]:
+                            continue_kwargs["parallel_tool_calls"] = False
+                        
+                        continue_response = client.chat.completions.create(**continue_kwargs)
                     
                     # Process the continuation response
                     continue_message = continue_response.choices[0].message
