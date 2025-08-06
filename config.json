@@ -26,6 +26,10 @@
     "require_powershell_confirmation": true,
     "require_bash_confirmation": true
   },
+  "display": {
+    "enable_markdown_rendering": true,
+    "force_plain_text": false
+  },
   "excluded_files": [
     ".DS_Store", "Thumbs.db", ".gitignore", ".python-version", "uv.lock",
     ".uv", "uvenv", ".uvenv", ".venv", "venv", "__pycache__", ".pytest_cache",

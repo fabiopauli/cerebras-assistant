@@ -59,7 +59,7 @@ from utils import (
     validate_tool_calls, get_prompt_indicator, normalize_path, is_binary_file,
     read_local_file, add_file_context_smartly, find_best_matching_file,
     apply_fuzzy_diff_edit, run_bash_command, run_powershell_command,
-    get_directory_tree_summary
+    get_directory_tree_summary, render_markdown_response, enhance_terminal_output
 )
 
 # Initialize Cerebras client
@@ -533,10 +533,11 @@ def try_handle_r1_command(user_input: str, conversation_history: List[Dict[str, 
                         }
                     })
             
-            console.print("[bold bright_magenta]🧠 Qwen:[/bold bright_magenta] ", end="")
+            console.print("[bold bright_magenta]🧠 Qwen:[/bold bright_magenta]")
             if full_response_content:
                 clean_content = full_response_content.replace("<think>", "").replace("</think>", "")
-                console.print(clean_content, style="bright_magenta")
+                enhanced_content = enhance_terminal_output(clean_content)
+                render_markdown_response(enhanced_content)
             else:
                 console.print("[dim]Processing tool calls...[/dim]", style="bright_magenta")
             
@@ -581,6 +582,22 @@ def try_handle_reasoner_command(user_input: str) -> bool:
             model_context['is_reasoner'] = False
             console.print(f"[green]✓ Switched to {DEFAULT_MODEL} model 💬[/green]")
             console.print("[dim]All subsequent conversations will use the chat model.[/dim]")
+        return True
+    return False
+
+def try_handle_markdown_command(user_input: str) -> bool:
+    """Handle /markdown command to toggle markdown rendering."""
+    if user_input.strip().lower() == "/markdown":
+        from config import display_context
+        current_state = display_context.get("enable_markdown_rendering", True)
+        display_context["enable_markdown_rendering"] = not current_state
+        
+        if display_context["enable_markdown_rendering"]:
+            console.print("[green]✓ Markdown rendering enabled 🎨[/green]")
+            console.print("[dim]AI responses will be formatted as markdown when detected.[/dim]")
+        else:
+            console.print("[yellow]✓ Markdown rendering disabled 📝[/yellow]")
+            console.print("[dim]AI responses will be displayed as plain text.[/dim]")
         return True
     return False
 
@@ -739,6 +756,7 @@ def try_handle_help_command(user_input: str) -> bool:
         help_table.add_row("/help", "Show this help")
         help_table.add_row("/r", "Call Reasoner model for one-off reasoning tasks")
         help_table.add_row("/reasoner", "Toggle between chat and reasoner models")
+        help_table.add_row("/markdown", "Toggle markdown rendering for AI responses")
         help_table.add_row("/clear", "Clear screen")
         help_table.add_row("/clear-context", "Clear conversation context")
         help_table.add_row("/context", "Show context usage statistics")
@@ -764,6 +782,11 @@ def try_handle_help_command(user_input: str) -> bool:
         # Show current model status
         current_model_name = "Reasoner 🧠" if model_context['is_reasoner'] else "Chat 💬"
         console.print(f"\n[dim]Current model: {current_model_name}[/dim]")
+        
+        # Show markdown rendering status
+        from config import display_context
+        markdown_status = "✓ Enabled" if display_context.get("enable_markdown_rendering", True) else "✗ Disabled"
+        console.print(f"[dim]Markdown rendering: {markdown_status}[/dim]")
         
         # Show fuzzy matching status
         fuzzy_status = "✓ Available" if FUZZY_AVAILABLE else "✗ Not installed (pip install thefuzz python-levenshtein)"
@@ -1418,6 +1441,7 @@ def main_loop() -> None:
             if try_handle_git_info_command(user_input): continue
             if try_handle_r1_command(user_input, conversation_history): continue
             if try_handle_reasoner_command(user_input): continue
+            if try_handle_markdown_command(user_input): continue
             if try_handle_clear_command(user_input): continue
             if try_handle_clear_context_command(user_input, conversation_history): continue
             if try_handle_context_command(user_input, conversation_history): continue
@@ -1491,12 +1515,13 @@ def main_loop() -> None:
                         }
                     })
 
-            # Display the response content
-            console.print(f"[bold bright_magenta]🤖 {model_name}:[/bold bright_magenta] ", end="")
+            # Display the response content with enhanced markdown rendering
+            console.print(f"[bold bright_magenta]🤖 {model_name}:[/bold bright_magenta]")
             if full_response_content:
                 # Strip <think> and </think> tags from the content
                 clean_content = full_response_content.replace("<think>", "").replace("</think>", "")
-                console.print(clean_content, style="bright_magenta")
+                enhanced_content = enhance_terminal_output(clean_content)
+                render_markdown_response(enhanced_content)
             else:
                 console.print("[dim]No text response, checking for tool calls...[/dim]", style="bright_magenta")
 
@@ -1571,11 +1596,12 @@ def main_loop() -> None:
                                 }
                             })
 
-                    # Display the continuation content
-                    console.print(f"[bold bright_magenta]🤖 {model_name}:[/bold bright_magenta] ", end="")
+                    # Display the continuation content with enhanced markdown rendering
+                    console.print(f"[bold bright_magenta]🤖 {model_name}:[/bold bright_magenta]")
                     if continuation_content:
                         clean_content = continuation_content.replace("<think>", "").replace("</think>", "")
-                        console.print(clean_content, style="bright_magenta")
+                        enhanced_content = enhance_terminal_output(clean_content)
+                        render_markdown_response(enhanced_content)
                     else:
                         console.print("[dim]Continuing with tool calls...[/dim]", style="bright_magenta")
                     

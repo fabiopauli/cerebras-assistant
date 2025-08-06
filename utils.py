@@ -18,11 +18,13 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.syntax import Syntax
 
 # Import configuration
 import config
 from config import (
-    os_info, git_context, model_context, security_context,
+    os_info, git_context, model_context, security_context, display_context,
     FUZZY_AVAILABLE, MIN_FUZZY_SCORE, MIN_EDIT_SCORE, MAX_FILE_CONTENT_SIZE_CREATE,
     ESTIMATED_MAX_TOKENS, CONTEXT_WARNING_THRESHOLD, AGGRESSIVE_TRUNCATION_THRESHOLD,
     MAX_HISTORY_MESSAGES, MAX_CONTEXT_FILES, MAX_MULTIPLE_READ_SIZE,
@@ -44,6 +46,153 @@ console = Console()
 
 # Token count cache for performance optimization
 _token_cache = {}
+
+# =============================================================================
+# MARKDOWN RENDERING UTILITIES
+# =============================================================================
+
+def render_markdown_response(content: str, force_plain: bool = False) -> None:
+    """
+    Render AI response content as markdown with proper formatting for Windows and bash.
+    
+    Args:
+        content: The content to render
+        force_plain: If True, render as plain text without markdown formatting
+    """
+    if not content.strip():
+        return
+    
+    # Check configuration for markdown rendering preferences
+    should_force_plain = (force_plain or 
+                         display_context.get("force_plain_text", False) or 
+                         not display_context.get("enable_markdown_rendering", True))
+    
+    if should_force_plain or not _should_use_markdown_rendering(content):
+        # Use plain text rendering for non-markdown content
+        console.print(content, style="bright_magenta")
+        return
+    
+    try:
+        # Create markdown object with improved theme for cross-platform compatibility
+        markdown_obj = Markdown(
+            content,
+            code_theme="monokai",  # Good contrast on both dark and light terminals
+            hyperlinks=False,     # Disable hyperlinks for better compatibility
+            inline_code_theme="bold magenta"  # Make inline code stand out
+        )
+        
+        # Render with magenta style to match the AI response color scheme
+        console.print(markdown_obj, style="bright_magenta")
+        
+    except Exception as e:
+        # Fallback to plain text if markdown rendering fails
+        console.print(f"[dim]Markdown rendering failed: {e}[/dim]")
+        console.print(content, style="bright_magenta")
+
+def _should_use_markdown_rendering(content: str) -> bool:
+    """
+    Determine if content should be rendered as markdown based on markdown indicators.
+    
+    Args:
+        content: The content to check
+        
+    Returns:
+        True if content appears to contain markdown
+    """
+    if not content:
+        return False
+    
+    # Look for common markdown patterns
+    markdown_indicators = [
+        '```',           # Code blocks
+        '**',            # Bold text
+        '__',            # Bold/italic text
+        '* ',            # Bullet lists
+        '- ',            # Bullet lists  
+        '+ ',            # Bullet lists
+        '[',             # Links (might contain brackets)
+        '`',             # Inline code
+        '> ',            # Blockquotes
+        '1. ',           # Numbered lists
+        '2. ',           # Numbered lists
+        '\n---',         # Horizontal rules
+        '\n***',         # Horizontal rules
+    ]
+    
+    # Check for headers (any level)
+    has_headers = any(content.startswith('#') or '\n#' in content for line in content.split('\n'))
+    
+    # Count markdown indicators
+    indicator_count = sum(1 for indicator in markdown_indicators if indicator in content)
+    
+    # Use markdown rendering if we find multiple indicators, strong ones, or headers
+    return (indicator_count >= 2 or 
+            '```' in content or 
+            has_headers or
+            content.count('- ') >= 2 or  # Multiple list items
+            content.count('* ') >= 2)    # Multiple list items
+
+def format_code_block(code: str, language: str = "text", title: str = None) -> None:
+    """
+    Display a code block with syntax highlighting and proper formatting.
+    
+    Args:
+        code: The code content
+        language: Programming language for syntax highlighting
+        title: Optional title for the code block
+    """
+    try:
+        syntax = Syntax(
+            code,
+            language,
+            theme="monokai",
+            line_numbers=True,
+            word_wrap=False,
+            background_color="default"
+        )
+        
+        if title:
+            console.print(Panel(syntax, title=title, border_style="blue"))
+        else:
+            console.print(syntax)
+            
+    except Exception as e:
+        # Fallback to plain text with panel
+        console.print(f"[dim]Syntax highlighting failed: {e}[/dim]")
+        if title:
+            console.print(Panel(code, title=title, border_style="yellow"))
+        else:
+            console.print(Panel(code, border_style="yellow"))
+
+def enhance_terminal_output(content: str) -> str:
+    """
+    Enhance content for better terminal display across platforms.
+    
+    Args:
+        content: Content to enhance
+        
+    Returns:
+        Enhanced content with better formatting
+    """
+    if not content:
+        return content
+    
+    # Fix Windows-specific line ending issues
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Ensure proper spacing around code blocks
+    import re
+    content = re.sub(r'\n```(\w+)?\n', r'\n\n```\1\n', content)
+    content = re.sub(r'\n```\n', r'\n```\n\n', content)
+    
+    # Add proper spacing around headers
+    content = re.sub(r'\n(#{1,6}\s+)', r'\n\n\1', content)
+    
+    # Ensure lists have proper spacing
+    content = re.sub(r'\n([*+-]\s+)', r'\n\1', content)
+    content = re.sub(r'\n(\d+\.\s+)', r'\n\1', content)
+    
+    return content
 
 def _get_cache_key(content: str, content_type: str = "content") -> str:
     """Generate a cache key for token counting."""

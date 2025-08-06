@@ -119,6 +119,13 @@ DEFAULT_SECURITY_CONTEXT = {
     'require_bash_confirmation': security_config.get("require_bash_confirmation", True)
 }
 
+# Display settings
+display_config = config.get("display", {})
+display_context = {
+    "enable_markdown_rendering": display_config.get("enable_markdown_rendering", True),
+    "force_plain_text": display_config.get("force_plain_text", False)
+}
+
 # File exclusion patterns from config
 EXCLUDED_FILES: Set[str] = set(config.get("excluded_files", [
     ".DS_Store", "Thumbs.db", ".gitignore", ".python-version", "uv.lock", 
