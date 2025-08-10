@@ -841,74 +841,319 @@ def find_best_matching_file(root_dir: Path, user_path: str, min_score: int = MIN
     
     return None
 
+def preprocess_snippet_for_editing(snippet: str, file_content: str) -> str:
+    """
+    Preprocess a snippet to improve fuzzy matching success.
+    """
+    if not snippet.strip():
+        return snippet
+    
+    # Remove common leading/trailing whitespace issues
+    lines = snippet.split('\n')
+    
+    # Remove empty lines at start and end
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    
+    if not lines:
+        return snippet
+    
+    # Find the minimum indentation (excluding empty lines)
+    min_indent = float('inf')
+    for line in lines:
+        if line.strip():
+            indent = len(line) - len(line.lstrip())
+            min_indent = min(min_indent, indent)
+    
+    if min_indent == float('inf'):
+        min_indent = 0
+    
+    # Remove common leading indentation
+    if min_indent > 0:
+        dedented_lines = []
+        for line in lines:
+            if line.strip():
+                dedented_lines.append(line[min_indent:])
+            else:
+                dedented_lines.append('')
+        lines = dedented_lines
+    
+    return '\n'.join(lines)
+
+def find_code_blocks_with_context(content: str, target: str) -> List[Tuple[str, int, int, str, str]]:
+    """
+    Find potential matching code blocks with context information.
+    Returns list of (block_text, start_line, end_line, normalized_block, context).
+    """
+    if not FUZZY_AVAILABLE:
+        return []
+    
+    lines = content.split('\n')
+    target_lines = target.split('\n')
+    target_line_count = len(target_lines)
+    
+    candidates = []
+    for i in range(len(lines) - target_line_count + 1):
+        block_lines = lines[i:i + target_line_count]
+        block_text = '\n'.join(block_lines)
+        
+        # Get context (2 lines before and after)
+        context_start = max(0, i - 2)
+        context_end = min(len(lines), i + target_line_count + 2)
+        context = '\n'.join(lines[context_start:context_end])
+        
+        # Normalize for comparison
+        normalized_block = preprocess_snippet_for_editing(block_text, content)
+        
+        candidates.append((block_text, i, i + target_line_count - 1, normalized_block, context))
+    
+    return candidates
+
+def normalize_indentation(text: str) -> Tuple[str, int]:
+    """
+    Normalize indentation and return (normalized_text, min_indent).
+    """
+    lines = text.split('\n')
+    
+    # Find minimum indentation
+    min_indent = float('inf')
+    for line in lines:
+        if line.strip():
+            indent = len(line) - len(line.lstrip())
+            min_indent = min(min_indent, indent)
+    
+    if min_indent == float('inf'):
+        min_indent = 0
+    
+    # Remove common indentation
+    normalized_lines = []
+    for line in lines:
+        if line.strip():
+            normalized_lines.append(line[min_indent:])
+        else:
+            normalized_lines.append('')
+    
+    return '\n'.join(normalized_lines), min_indent
+
+def diagnose_edit_file_issues(file_path: str, original_snippet: str) -> str:
+    """
+    Diagnostic function to help debug edit_file issues.
+    """
+    try:
+        norm_path = normalize_path(file_path)
+        content = read_local_file(norm_path)
+        
+        console.print(f"[bold blue]Diagnosing edit_file for {file_path}[/bold blue]")
+        
+        # Basic file info
+        lines = content.split('\n')
+        console.print(f"File info: {len(content)} chars, {len(lines)} lines")
+        
+        # Check for exact match
+        exact_count = content.count(original_snippet)
+        console.print(f"Exact matches: {exact_count}")
+        
+        if exact_count == 0 and FUZZY_AVAILABLE:
+            # Try fuzzy matching analysis
+            candidates = find_code_blocks_with_context(content, original_snippet)
+            console.print(f"Fuzzy candidates found: {len(candidates)}")
+            
+            if candidates:
+                norm_target, _ = normalize_indentation(original_snippet)
+                
+                for i, (block_text, start_line, end_line, norm_block, context) in enumerate(candidates[:3]):
+                    score = fuzz.ratio(norm_target, norm_block)
+                    console.print(f"  Candidate {i+1}: Line {start_line+1}, Score: {score:.1f}")
+                    
+                    if i == 0:  # Show the best candidate
+                        console.print("  Best candidate preview:")
+                        preview = block_text[:200] + "..." if len(block_text) > 200 else block_text
+                        console.print(f"    {preview}")
+        
+        return "Diagnostic complete - check console output for details"
+        
+    except Exception as e:
+        return f"Diagnostic failed: {e}"
+
 def apply_fuzzy_diff_edit(path: str, original_snippet: str, new_snippet: str) -> None:
     """
-    Apply a diff edit to a file by replacing original snippet with new snippet.
-    Uses fuzzy matching to find the best location for the snippet.
+    Improved fuzzy diff edit with better preprocessing and indentation handling.
     """
-    
     normalized_path_str = normalize_path(path)
-    content = ""
+    
     try:
         content = read_local_file(normalized_path_str)
         
-        # 1. First, try for an exact match for performance and accuracy
-        if content.count(original_snippet) == 1:
-            updated_content = content.replace(original_snippet, new_snippet, 1)
-            with open(normalized_path_str, "w", encoding="utf-8") as f:
-                f.write(updated_content)
-            console.print(f"[bold blue]✓[/bold blue] Applied exact diff edit to '[bright_cyan]{normalized_path_str}[/bright_cyan]'")
-            return
-
-        # 2. If exact match fails, use fuzzy matching (if available)
+        # Preprocess snippets
+        processed_original = preprocess_snippet_for_editing(original_snippet, content)
+        processed_new = preprocess_snippet_for_editing(new_snippet, content)
+        
+        # 1. Try exact match with processed snippet
+        if processed_original in content:
+            exact_count = content.count(processed_original)
+            if exact_count == 1:
+                updated_content = content.replace(processed_original, processed_new, 1)
+                with open(normalized_path_str, "w", encoding="utf-8") as f:
+                    f.write(updated_content)
+                console.print(f"[bold blue]✓[/bold blue] Applied exact match (preprocessed) to '[bright_cyan]{normalized_path_str}[/bright_cyan]'")
+                return
+            else:
+                raise ValueError(f"Preprocessed snippet appears {exact_count} times - too ambiguous")
+        
+        # 2. Try original exact match
+        if original_snippet in content:
+            exact_count = content.count(original_snippet)
+            if exact_count == 1:
+                updated_content = content.replace(original_snippet, new_snippet, 1)
+                with open(normalized_path_str, "w", encoding="utf-8") as f:
+                    f.write(updated_content)
+                console.print(f"[bold blue]✓[/bold blue] Applied exact match to '[bright_cyan]{normalized_path_str}[/bright_cyan]'")
+                return
+            else:
+                raise ValueError(f"Original snippet appears {exact_count} times - too ambiguous")
+        
+        # 3. Fuzzy matching with improved scoring
         if not FUZZY_AVAILABLE:
-            raise ValueError("Original snippet not found and fuzzy matching not available")
-            
-        console.print("[dim]Exact snippet not found. Trying fuzzy matching...[/dim]")
-
-        # Create a list of "choices" to match against. These are overlapping chunks of the file.
+            raise ValueError("Fuzzy matching not available and exact match failed")
+        
+        console.print("[dim]Exact match failed. Trying improved fuzzy matching...[/dim]")
+        
         lines = content.split('\n')
-        original_lines_count = len(original_snippet.split('\n'))
+        original_lines = processed_original.split('\n')
+        original_lines_count = len(original_lines)
         
-        # Create sliding window of text chunks
-        choices = []
+        if original_lines_count > len(lines):
+            raise ValueError(f"Snippet ({original_lines_count} lines) longer than file ({len(lines)} lines)")
+        
+        # Create better candidates with context
+        candidates = []
         for i in range(len(lines) - original_lines_count + 1):
-            chunk = '\n'.join(lines[i:i+original_lines_count])
-            choices.append(chunk)
+            # Get the chunk
+            chunk_lines = lines[i:i + original_lines_count]
+            chunk = '\n'.join(chunk_lines)
+            
+            # Also get preprocessed version of chunk for comparison
+            processed_chunk = preprocess_snippet_for_editing(chunk, content)
+            
+            # Add context for better scoring
+            context_start = max(0, i - 2)
+            context_end = min(len(lines), i + original_lines_count + 2)
+            context = '\n'.join(lines[context_start:context_end])
+            
+            candidates.append((chunk, processed_chunk, i, context))
         
-        if not choices:
-            raise ValueError("File content is too short to perform a fuzzy match.")
-
-        # Find the best match
-        best_match, score = fuzzy_process.extractOne(original_snippet, choices)
-
-        if score < MIN_EDIT_SCORE:
-            raise ValueError(f"Fuzzy match score ({score}) is below threshold ({MIN_EDIT_SCORE}). Snippet not found or too different.")
-
-        # Ensure the best match is unique to avoid ambiguity
-        if choices.count(best_match) > 1:
-            raise ValueError(f"Ambiguous fuzzy edit: The best matching snippet appears multiple times in the file.")
+        if not candidates:
+            raise ValueError("No suitable chunks found for fuzzy matching")
         
-        # Replace the best fuzzy match
-        updated_content = content.replace(best_match, new_snippet, 1)
+        # Score all candidates using multiple methods
+        scored_candidates = []
+        for chunk, processed_chunk, start_idx, context in candidates:
+            # Multiple scoring approaches
+            scores = []
+            
+            # Score 1: Raw comparison
+            raw_score = fuzz.ratio(original_snippet, chunk)
+            scores.append(raw_score * 0.3)
+            
+            # Score 2: Preprocessed comparison (most important)
+            processed_score = fuzz.ratio(processed_original, processed_chunk)
+            scores.append(processed_score * 0.5)
+            
+            # Score 3: Token-based comparison (order independent)
+            token_score = fuzz.token_sort_ratio(processed_original.strip(), processed_chunk.strip())
+            scores.append(token_score * 0.2)
+            
+            final_score = sum(scores)
+            scored_candidates.append((final_score, chunk, start_idx, context, processed_chunk))
+        
+        # Sort by score
+        scored_candidates.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_chunk, start_idx, context, processed_chunk = scored_candidates[0]
+        
+        # Check score threshold
+        if best_score < MIN_EDIT_SCORE:
+            raise ValueError(f"Best fuzzy match score ({best_score:.1f}) below threshold ({MIN_EDIT_SCORE})")
+        
+        # Check for ambiguity
+        if len(scored_candidates) > 1:
+            second_score = scored_candidates[1][0]
+            if abs(best_score - second_score) < 5:
+                raise ValueError(f"Ambiguous fuzzy match: scores {best_score:.1f} and {second_score:.1f} too close")
+        
+        # Apply the replacement with smart indentation
+        lines_before = lines[:start_idx]
+        lines_after = lines[start_idx + original_lines_count:]
+        
+        # Smart indentation: match the indentation of the first line of the matched chunk
+        if best_chunk.strip():
+            first_line = best_chunk.split('\n')[0]
+            if first_line.strip():
+                # Extract base indentation
+                base_indent = len(first_line) - len(first_line.lstrip())
+                indent_chars = first_line[:base_indent]
+                
+                # Apply to new snippet
+                new_lines = processed_new.split('\n')
+                indented_new_lines = []
+                for j, line in enumerate(new_lines):
+                    if line.strip():
+                        if j == 0:
+                            # First line gets base indentation
+                            indented_new_lines.append(indent_chars + line.lstrip())
+                        else:
+                            # Preserve relative indentation
+                            original_indent = len(line) - len(line.lstrip())
+                            total_indent = base_indent + original_indent
+                            if indent_chars.startswith('\t'):
+                                new_indent = '\t' * (total_indent // 4) + ' ' * (total_indent % 4)
+                            else:
+                                new_indent = ' ' * total_indent
+                            indented_new_lines.append(new_indent + line.lstrip())
+                    else:
+                        indented_new_lines.append('')
+                
+                final_new_snippet = '\n'.join(indented_new_lines)
+            else:
+                final_new_snippet = processed_new
+        else:
+            final_new_snippet = processed_new
+        
+        # Reconstruct file
+        final_lines = lines_before + final_new_snippet.split('\n') + lines_after
+        updated_content = '\n'.join(final_lines)
+        
         with open(normalized_path_str, "w", encoding="utf-8") as f:
             f.write(updated_content)
-        console.print(f"[bold blue]✓[/bold blue] Applied [bold]fuzzy[/bold] diff edit to '[bright_cyan]{normalized_path_str}[/bright_cyan]' (score: {score})")
-
-    except FileNotFoundError:
-        console.print(f"[bold red]✗[/bold red] File not found for diff: '[bright_cyan]{path}[/bright_cyan]'")
-        raise
+        
+        console.print(f"[bold blue]✓[/bold blue] Applied improved fuzzy match (score: {best_score:.1f}) to '[bright_cyan]{normalized_path_str}[/bright_cyan]'")
+        
     except ValueError as e:
-        console.print(f"[bold yellow]⚠[/bold yellow] {str(e)} in '[bright_cyan]{path}[/bright_cyan]'. No changes.")
-        if "Original snippet not found" in str(e) or "Fuzzy match score" in str(e) or "Ambiguous edit" in str(e):
-            console.print("\n[bold blue]Expected snippet:[/bold blue]")
-            console.print(Panel(original_snippet, title="Expected", border_style="blue"))
-            if content:
-                console.print("\n[bold blue]Actual content (or relevant part):[/bold blue]")
-                start_idx = max(0, content.find(original_snippet[:20]) - 100)
-                end_idx = min(len(content), start_idx + len(original_snippet) + 200)
-                display_snip = ("..." if start_idx > 0 else "") + content[start_idx:end_idx] + ("..." if end_idx < len(content) else "")
-                console.print(Panel(display_snip or content, title="Actual", border_style="yellow"))
+        console.print(f"[bold yellow]⚠[/bold yellow] {str(e)} in '[bright_cyan]{path}[/bright_cyan]'")
+        
+        # Enhanced debugging output
+        console.print("\n[bold blue]Debug Info:[/bold blue]")
+        console.print(f"Original snippet ({len(original_snippet)} chars, {len(original_snippet.split(chr(10)))} lines):")
+        console.print(Panel(original_snippet[:500] + ("..." if len(original_snippet) > 500 else ""), 
+                          title="Original Snippet", border_style="blue"))
+        
+        if len(processed_original) != len(original_snippet):
+            console.print(f"Processed snippet ({len(processed_original)} chars):")
+            console.print(Panel(processed_original[:500] + ("..." if len(processed_original) > 500 else ""), 
+                              title="Processed Snippet", border_style="cyan"))
+        
+        # Show best match for debugging
+        if 'scored_candidates' in locals() and scored_candidates:
+            best_score, best_chunk, start_idx, context, _ = scored_candidates[0]
+            console.print(f"\nBest match found (score: {best_score:.1f}) at line {start_idx + 1}:")
+            console.print(Panel(best_chunk[:500] + ("..." if len(best_chunk) > 500 else ""), 
+                              title=f"Best Match (line {start_idx + 1})", border_style="yellow"))
+        
+        raise
+    
+    except Exception as e:
+        console.print(f"[bold red]✗[/bold red] Unexpected error in improved fuzzy edit: {e}")
         raise
 
 # =============================================================================
